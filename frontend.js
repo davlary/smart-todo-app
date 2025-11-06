@@ -26,6 +26,9 @@ const loadFromStorage = (key, defaultValue = []) => {
 window.todos = loadFromStorage('todos', []);
 window.goals = loadFromStorage('goals', []);
 window.journalEntries = loadFromStorage('journal', []);
+// Habits state: array of habit objects
+// habit: { id, name, frequency: 'daily'|'weekly', reminderTime: 'HH:MM'|null, why: string|null, history: { 'YYYY-MM-DD': true } }
+window.habits = loadFromStorage('habits', []);
 
 let timer = null;
 let timerSeconds = 25 * 60; // seconds
@@ -290,7 +293,45 @@ window.saveJournalEntry = function(){
     renderJournalEntries(); showAlert('Journal entry saved successfully!');
 };
 
-window.renderJournalEntries = function(){ const container = $('journal-entries'); if (!container) return; container.innerHTML = window.journalEntries.map(entry=>`\n<div class=\"bg-card-light dark:bg-card-dark rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 animate-fade-in\">\n  <div class=\"flex justify-between items-start mb-4\">\n    <div>\n      <h3 class=\"font-semibold\">${entry.date.toLocaleDateString()}</h3>\n      <div class=\"flex space-x-4 text-sm text-gray-600 dark:text-gray-400\">\n        <span>Energy: ${entry.energyLevel}/5</span>\n        <span>Focus: ${entry.focusQuality}/5</span>\n        <span>Tasks: ${entry.completedTasks}/${entry.totalTasks}</span>\n      </div>\n    </div>\n    <button onclick=\"deleteJournalEntry(${entry.id})\" class=\"text-red-500 hover:text-red-700\">\n      <i class=\\\"fas fa-trash\\\"></i>\n    </button>\n  </div>\n  <p class=\"text-gray-700 dark:text-gray-300 whitespace-pre-wrap\">${escapeHtml(entry.text)}</p>\n</div>`).join(''); };
+window.renderJournalEntries = function(){
+    const container = $('journal-entries');
+    if (!container) return;
+    
+    const getEnergyEmoji = level => {
+        const emojis = ['😫', '😴', '😐', '😊', '⚡️'];
+        return emojis[level-1] || '😐';
+    };
+    
+    const getFocusEmoji = level => {
+        const emojis = ['🌪', '😅', '😐', '👍', '🎯'];
+        return emojis[level-1] || '😐';
+    };
+    
+    container.innerHTML = window.journalEntries.map(entry => `
+        <div class="journal-entry animate-fade-in">
+            <div class="journal-meta">
+                <div class="flex-1">
+                    <div class="text-lg font-semibold mb-2">${entry.date.toLocaleDateString('en-US', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                    })}</div>
+                    <div class="flex space-x-6">
+                        <span><i class="fas fa-battery-three-quarters mr-2"></i>Energy: ${getEnergyEmoji(entry.energyLevel)} ${entry.energyLevel}/5</span>
+                        <span><i class="fas fa-bullseye mr-2"></i>Focus: ${getFocusEmoji(entry.focusQuality)} ${entry.focusQuality}/5</span>
+                        <span><i class="fas fa-tasks mr-2"></i>Tasks: ${entry.completedTasks}/${entry.totalTasks}</span>
+                    </div>
+                </div>
+                <button onclick="deleteJournalEntry(${entry.id})" 
+                    class="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+            <div class="journal-content">${escapeHtml(entry.text)}</div>
+        </div>
+    `).join('');
+};
 
 window.deleteJournalEntry = function(id){ showConfirmDialog('Are you sure you want to delete this journal entry?', ()=>{ window.journalEntries = window.journalEntries.filter(e=>e.id!==id); saveToStorage('journal', window.journalEntries); renderJournalEntries(); }); };
 
@@ -323,9 +364,230 @@ window.showAlert = function(message){ const modal = document.createElement('div'
 
 window.showConfirmDialog = function(message, onConfirm){ const modal = document.createElement('div'); modal.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50'; modal.innerHTML = `<div class=\"bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-sm w-full mx-4\"><div class=\"flex items-center mb-4\"><i class=\"fas fa-question-circle text-yellow-500 mr-3\"></i><h3 class=\"font-semibold\">Confirm Action</h3></div><p class=\"text-gray-700 dark:text-gray-300 mb-4\">${message}</p><div class=\"flex justify-end space-x-3\"><button class=\"px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors\" onclick=\"this.closest('.fixed').remove()\">Cancel</button><button class=\"px-4 py-2 bg-red-500 text-white hover:bg-red-600 rounded transition-colors\" onclick=\"this.closest('.fixed').remove(); (${onConfirm})()\">Confirm</button></div></div>`; document.body.appendChild(modal); };
 
+// Clear all app data (todos, goals, journal) with confirmation
+window.clearAllData = function(){
+    showConfirmDialog('This will permanently remove all todos, goals, and journal entries from this browser. Are you sure?', ()=>{
+        // reset in-memory state
+        window.todos = [];
+        window.goals = [];
+        window.journalEntries = [];
+
+        // remove only the app keys from localStorage
+        try{
+            localStorage.removeItem('todos');
+            localStorage.removeItem('goals');
+            localStorage.removeItem('journal');
+        }catch(e){ console.warn('Failed clearing localStorage keys', e); }
+
+        // re-render UI
+        try{ renderTodos(); }catch(e){}
+        try{ renderGoals(); }catch(e){}
+        try{ renderJournalEntries(); }catch(e){}
+        try{ updateDashboard(); }catch(e){}
+
+        // Small feedback
+        showAlert('All app data has been cleared from this browser.');
+    });
+};
+
+// --- Habits feature ---
+function getDateKey(date = new Date()){ const y = date.getFullYear(); const m = String(date.getMonth()+1).padStart(2,'0'); const d = String(date.getDate()).padStart(2,'0'); return `${y}-${m}-${d}`; }
+function getWeekKey(date = new Date()){ // Year-week like YYYY-W##
+    const tmp = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    const dayNum = tmp.getUTCDay() || 7;
+    tmp.setUTCDate(tmp.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(tmp.getUTCFullYear(),0,1));
+    const weekNo = Math.ceil((((tmp - yearStart) / 86400000) + 1)/7);
+    return `${tmp.getUTCFullYear()}-W${String(weekNo).padStart(2,'0')}`;
+}
+
+// compute streak: for daily, consecutive days; for weekly, consecutive weeks where at least one day in week is checked
+function computeStreak(habit){
+    const today = new Date();
+    let count = 0;
+    if (habit.frequency === 'daily'){
+        let cursor = new Date();
+        while (true){
+            const key = getDateKey(cursor);
+            if (habit.history && habit.history[key]){ count++; cursor.setDate(cursor.getDate() - 1); } else break;
+        }
+    } else { // weekly
+        let cursor = new Date();
+        while (true){
+            const key = getWeekKey(cursor);
+            // Check any date in that week - we stored by dates, so search history for any date with same week key
+            const found = Object.keys(habit.history||{}).some(d=> getWeekKey(new Date(d)) === key && habit.history[d]);
+            if (found){ count++; cursor.setDate(cursor.getDate() - 7); } else break;
+        }
+    }
+    return count;
+}
+
+window.addHabit = function(){
+    const name = $('habit-name').value.trim();
+    const frequency = $('habit-frequency').value;
+    const reminder = $('habit-reminder').value || null;
+    const why = $('habit-why').value.trim() || null;
+    if (!name) { showToast('Please provide a habit name', 'warn', 3200); return; }
+
+    // support editing when data attribute set on save button
+    const editingId = window._editingHabitId || null;
+    if (editingId){
+        const h = window.habits.find(x=>x.id===editingId);
+        if (!h) return;
+        h.name = name; h.frequency = frequency; h.reminderTime = reminder; h.why = why;
+        saveToStorage('habits', window.habits);
+        window._editingHabitId = null;
+        $('habit-save-btn').textContent = 'Save Habit';
+        $('habit-name').value=''; $('habit-frequency').value='daily'; $('habit-reminder').value=''; $('habit-why').value='';
+    renderHabits(); showToast('Habit updated', 'success', 2600);
+        return;
+    }
+
+    const habit = { id: Date.now(), name, frequency, reminderTime: reminder, why, history: {} };
+    window.habits.push(habit);
+    saveToStorage('habits', window.habits);
+    $('habit-name').value=''; $('habit-frequency').value='daily'; $('habit-reminder').value=''; $('habit-why').value='';
+    renderHabits(); showToast('Habit added', 'success', 2600);
+};
+
+window.deleteHabit = function(id){
+    showConfirmDialog('Delete this habit?', ()=>{
+        window.habits = window.habits.filter(h=>h.id!==id);
+        saveToStorage('habits', window.habits);
+        renderHabits();
+    });
+};
+
+window.editHabit = function(id){
+    const h = window.habits.find(x=>x.id===id);
+    if (!h) return;
+    $('habit-name').value = h.name;
+    $('habit-frequency').value = h.frequency;
+    $('habit-reminder').value = h.reminderTime || '';
+    $('habit-why').value = h.why || '';
+    window._editingHabitId = id;
+    $('habit-save-btn').textContent = 'Save Changes';
+    // scroll into view
+    const el = $('habit-save-btn'); if (el) el.scrollIntoView({behavior:'smooth', block:'center'});
+};
+
+window.toggleHabit = function(id){
+    const h = window.habits.find(x=>x.id===id); if(!h) return;
+    const key = getDateKey(new Date());
+    const was = !!h.history[key];
+    h.history[key] = !was;
+    saveToStorage('habits', window.habits);
+    renderHabits();
+
+    // feedback: check streak and congratulate when thresholds crossed
+    const streak = computeStreak(h);
+    if (!was && streak>0 && [3,5,7,14].includes(streak)){
+        showToast(`🔥 ${streak}-day streak for "${h.name}" — keep it up!`, 'success', 4500);
+    } else if (!was){
+        // small micro moment
+        showToast('👏 You did it!', 'success', 2200);
+    }
+};
+
+function renderHabits(){
+    const container = $('habits-list'); if (!container) return;
+    if (!window.habits.length){ container.innerHTML = `<div class="text-gray-600 dark:text-gray-400">No habits yet. Add one above to get started.</div>`; return; }
+    container.innerHTML = window.habits.map(h=>{
+        const todayKey = getDateKey(new Date());
+        const doneToday = !!(h.history && h.history[todayKey]);
+        const streak = computeStreak(h);
+        const streakBadge = streak>0 ? `<span class="text-sm font-semibold text-primary">🔥 ${streak}</span>` : '';
+        const whyLine = h.why ? `<div class="text-sm text-gray-500 dark:text-gray-400 mt-1">${escapeHtml(h.why)}</div>` : '';
+        return `\n<div class="bg-card-light dark:bg-card-dark rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 flex items-center justify-between">\n  <div>\n    <div class=\"flex items-center gap-3\">\n      <label class=\"flex items-center gap-3\">\n        <input type=\"checkbox\" ${doneToday? 'checked':''} onchange=\"toggleHabit(${h.id})\" class=\"h-5 w-5 rounded border-gray-300 dark:border-gray-600 text-primary\"/>\n        <div>\n          <div class=\"font-semibold ${doneToday? 'text-green-600':'text-gray-900 dark:text-gray-100'}\">${escapeHtml(h.name)}</div>\n          <div class=\"text-sm text-gray-500 dark:text-gray-400\">${escapeHtml(h.frequency)} ${streakBadge}</div>\n        </div>\n      </label>\n    </div>\n    ${whyLine}\n  </div>\n  <div class=\"flex items-center gap-3\">\n    <button onclick=\"editHabit(${h.id})\" class=\"text-sm text-gray-600 dark:text-gray-300 hover:text-primary\">Edit</button>\n    <button onclick=\"deleteHabit(${h.id})\" class=\"text-sm text-red-500 hover:text-red-700\">Delete</button>\n  </div>\n</div>`;
+    }).join('');
+}
+
+// Heatmap rendering helper (separate so we can append after render)
+function renderHeatmapForHabitCard(habit, containerEl){
+    try{
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = now.getMonth();
+        const first = new Date(year, month, 1);
+        const last = new Date(year, month+1, 0);
+        const days = last.getDate();
+        const heat = document.createElement('div'); heat.className = 'heatmap'; heat.title = `Completion for ${first.toLocaleString('default', {month:'long'})}`;
+        for (let d=1; d<=days; d++){
+            const dt = new Date(year, month, d);
+            const key = getDateKey(dt);
+            const day = document.createElement('div'); day.className = 'day';
+            if (habit.history && habit.history[key]) day.classList.add('done');
+            if (key === getDateKey(new Date())) day.classList.add('today');
+            day.title = dt.toLocaleDateString();
+            heat.appendChild(day);
+        }
+        containerEl.appendChild(heat);
+    }catch(e){ /* ignore heatmap errors */ }
+}
+
+// Export / Import helpers
+window.exportHabits = function(){
+    const data = { habits: window.habits, exportedAt: new Date().toISOString() };
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url; a.download = `habits-export-${new Date().toISOString().slice(0,10)}.json`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    try{ showToast('Habits exported to JSON file', 'info', 3000); }catch(e){}
+};
+
+window.toggleHabitsImport = function(){ const inp = $('habits-import-file'); if (inp) inp.click(); };
+
+window.importHabits = function(e){
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const reader = new FileReader(); reader.onload = function(){
+        try{
+            const data = JSON.parse(reader.result);
+            if (!data || !Array.isArray(data.habits)) { showToast('Invalid file format', 'error', 3500); return; }
+            showConfirmDialog('Importing will replace current habits. Continue?', ()=>{
+                window.habits = data.habits.map(h=>({ ...h, history: h.history||{} }));
+                saveToStorage('habits', window.habits);
+                renderHabits();
+                scheduleReminders();
+                try{ showToast('Habits imported', 'success', 3000); }catch(e){}
+            });
+        }catch(err){ showToast('Failed to parse import file', 'error', 3500); }
+    };
+    reader.readAsText(f);
+    e.target.value = '';
+};
+
+// Reminders scheduling (Notification API + setTimeout)
+window._reminderTimers = [];
+function clearScheduledReminders(){ window._reminderTimers.forEach(t=>clearTimeout(t)); window._reminderTimers = []; }
+function scheduleReminders(){
+    clearScheduledReminders();
+    if (!('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+    const now = new Date();
+    window.habits.forEach(h=>{
+        if (!h.reminderTime) return;
+        const parts = h.reminderTime.split(':'); if (parts.length<2) return;
+        const hr = parseInt(parts[0],10); const min = parseInt(parts[1],10);
+        let next = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hr, min, 0, 0);
+        if (next <= now){ if (h.frequency === 'weekly') next.setDate(next.getDate()+7); else next.setDate(next.getDate()+1); }
+        const delay = next - now;
+        const tId = setTimeout(()=>{
+            try{ new Notification(h.name, { body: `Reminder: ${h.name}` }); }catch(e){}
+            try{ showToast(`Reminder: ${h.name}`, 'info', 4000); }catch(e){}
+            scheduleReminders();
+        }, delay);
+        window._reminderTimers.push(tId);
+    });
+}
+
+function requestNotificationPermission(){ if (!('Notification' in window)) return; if (Notification.permission === 'default') Notification.requestPermission().then(p=>{ if (p === 'granted') scheduleReminders(); }); }
+
+// expose render for initial load
+window.renderHabits = renderHabits;
+
 // Wire up on DOM ready
 document.addEventListener('DOMContentLoaded', ()=>{ cacheDOM(); // show dashboard by default
-    showView('dashboard'); window.updateDashboard(); window.loadJournalEntries(); // attach optional keyboard handler for Enter
+    showView('dashboard'); window.updateDashboard(); window.loadJournalEntries(); renderHabits(); // attach optional keyboard handler for Enter
     document.querySelectorAll('#new-todo').forEach(n=>n.addEventListener('keypress', e=>{ if (e.key==='Enter') addTodo(); }));
 });
 

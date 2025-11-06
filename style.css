@@ -6,6 +6,10 @@
   --primary-600: #4B4BC7;
   --glass: rgba(255,255,255,0.6);
   --radius: 12px;
+  --shadow-sm: 0 2px 8px rgba(15,23,42,0.08);
+  --shadow-md: 0 6px 18px rgba(15,23,42,0.12);
+  --shadow-lg: 0 8px 28px rgba(15,23,42,0.16);
+  --transition: all 0.2s ease;
 }
 
 @media (prefers-color-scheme: dark){
@@ -24,20 +28,79 @@ html,body{height:100%;background:var(--bg);font-family:Inter, ui-sans-serif, sys
 #sidebar{display:flex;flex-direction:column;background:linear-gradient(180deg,var(--card),rgba(255,255,255,0.02));border-right:1px solid rgba(0,0,0,0.04);min-width:260px}
 #sidebar .p-6{padding:1.25rem}
 
-.nav-btn{display:flex;align-items:center;gap:0.65rem;padding:0.7rem 0.9rem;border-radius:10px;background:transparent;border:none;color:var(--muted);cursor:pointer}
-.nav-btn i{width:20px;text-align:center}
-.nav-btn:hover{background:rgba(0,0,0,0.03);color:var(--primary)}
-.nav-btn.active{background:var(--primary);color:white}
+.nav-btn{
+  display:flex;
+  align-items:center;
+  gap:0.65rem;
+  padding:0.8rem 1rem;
+  border-radius:12px;
+  background:transparent;
+  border:none;
+  color:var(--muted);
+  cursor:pointer;
+  transition:var(--transition);
+  font-weight:500;
+}
+.nav-btn i{
+  width:20px;
+  text-align:center;
+  font-size:1.1rem;
+}
+.nav-btn:hover{
+  background:rgba(93,92,222,0.08);
+  color:var(--primary);
+  transform:translateX(4px);
+}
+.nav-btn.active{
+  background:var(--primary);
+  color:white;
+  box-shadow:0 4px 12px rgba(93,92,222,0.25);
+}
 
 /* Cards */
-.card{background:var(--card);border-radius:var(--radius);padding:1.25rem;border:1px solid rgba(0,0,0,0.04);box-shadow:0 6px 18px rgba(15,23,42,0.06)}
+.card{
+  background:var(--card);
+  border-radius:var(--radius);
+  padding:1.25rem;
+  border:1px solid rgba(0,0,0,0.04);
+  box-shadow:var(--shadow-sm);
+  transition:var(--transition);
+}
+.card:hover {
+  box-shadow:var(--shadow-md);
+  transform:translateY(-2px);
+}
 
 /* Progress bar subtle glow */
 #progress-bar{box-shadow:0 6px 20px rgba(93,92,222,0.18)}
 
 /* Todo items */
-.todo-item{display:flex;align-items:center;gap:0.75rem;border-radius:10px}
+.todo-item{
+  display:flex;
+  align-items:center;
+  gap:0.75rem;
+  border-radius:10px;
+  padding:0.75rem;
+  transition:var(--transition);
+  border:1px solid transparent;
+}
+.todo-item:hover{
+  background:rgba(93,92,222,0.04);
+  border-color:rgba(93,92,222,0.1);
+}
 .todo-item .text-sm{flex:1}
+.todo-item input[type="checkbox"] {
+  width:18px;
+  height:18px;
+  border-radius:4px;
+  border:2px solid var(--muted);
+  transition:var(--transition);
+  cursor:pointer;
+}
+.todo-item input[type="checkbox"]:checked {
+  border-color:var(--primary);
+  background:var(--primary);
+}
 
 /* Modals */
 .fixed{position:fixed}
@@ -63,3 +126,101 @@ html,body{height:100%;background:var(--bg);font-family:Inter, ui-sans-serif, sys
 
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 @keyframes slideUp{from{transform:translateY(10px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+/* Toasts */
+.toast-container{
+  position:fixed;
+  right:20px;
+  bottom:20px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  z-index:60;
+}
+.toast{
+  min-width:280px;
+  max-width:380px;
+  padding:14px 18px;
+  border-radius:12px;
+  color:#fff;
+  box-shadow:var(--shadow-lg);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  animation:slideInRight 0.3s ease forwards;
+  backdrop-filter:blur(8px);
+}
+.toast i {
+  font-size:1.2rem;
+}
+.toast.info{
+  background:linear-gradient(135deg,#5D5CDE,#4B4BC7);
+  border:1px solid rgba(93,92,222,0.2);
+}
+.toast.success{
+  background:linear-gradient(135deg,#10B981,#059669);
+  border:1px solid rgba(16,185,129,0.2);
+}
+.toast.warn{
+  background:linear-gradient(135deg,#F59E0B,#D97706);
+  border:1px solid rgba(245,158,11,0.2);
+}
+.toast.error{
+  background:linear-gradient(135deg,#EF4444,#DC2626);
+  border:1px solid rgba(239,68,68,0.2);
+}
+
+@keyframes slideInRight {
+  from {
+    transform:translateX(100%);
+    opacity:0;
+  }
+  to {
+    transform:translateX(0);
+    opacity:1;
+  }
+}
+
+/* Habit heatmap */
+.heatmap{
+  display:flex;
+  flex-wrap:wrap;
+  gap:4px;
+  margin-top:12px;
+  padding:12px;
+  background:rgba(0,0,0,0.02);
+  border-radius:8px;
+}
+.heatmap .day{
+  width:14px;
+  height:14px;
+  border-radius:4px;
+  background:#e6e6e6;
+  transition:var(--transition);
+  cursor:help;
+}
+.heatmap .day:hover{
+  transform:scale(1.2);
+}
+.heatmap .day.done{
+  background:#10B981;
+  box-shadow:0 2px 6px rgba(16,185,129,0.2);
+}
+.heatmap .day.missed{
+  background:#F87171;
+  box-shadow:0 2px 6px rgba(248,113,113,0.2);
+}
+.heatmap .day.today{
+  outline:2px solid rgba(93,92,222,0.3);
+  animation:pulse 2s infinite;
+}
+.heatmap .day.small{
+  width:12px;
+  height:12px;
+}
+
+@keyframes pulse {
+  0% { outline-color:rgba(93,92,222,0.3); }
+  50% { outline-color:rgba(93,92,222,0.6); }
+  100% { outline-color:rgba(93,92,222,0.3); }
+}

@@ -64,10 +64,15 @@
         <!-- Sidebar -->
         <div id="sidebar" class="w-64 bg-card-light dark:bg-card-dark border-r border-gray-200 dark:border-gray-700 flex flex-col">
             <div class="p-6 border-b border-gray-200 dark:border-gray-700">
-                <h1 class="text-xl font-bold text-primary flex items-center">
-                    <i class="fas fa-brain mr-2"></i>
-                    Productivity Hub
-                </h1>
+                <div class="flex items-center justify-between">
+                    <h1 class="text-xl font-bold text-primary flex items-center">
+                        <i class="fas fa-brain mr-2"></i>
+                        Productivity Hub
+                    </h1>
+                    <button title="Clear all app data" onclick="clearAllData()" class="text-gray-500 hover:text-red-600 ml-3 p-2 rounded-md" aria-label="Clear all app data">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
             </div>
             
             <nav class="flex-1 p-4">
@@ -94,6 +99,12 @@
                         <button onclick="showView(event,'focus')" class="nav-btn w-full text-left px-4 py-3 rounded-lg flex items-center space-x-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
                             <i class="fas fa-crosshairs"></i>
                             <span>Focus Mode</span>
+                        </button>
+                    </li>
+                    <li>
+                        <button onclick="showView(event,'habits')" class="nav-btn w-full text-left px-4 py-3 rounded-lg flex items-center space-x-3 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                            <i class="fas fa-fire"></i>
+                            <span>Habits</span>
                         </button>
                     </li>
                     <li>
@@ -349,6 +360,41 @@
                 </div>
             </div>
 
+            <!-- Habits View -->
+            <div id="habits-view" class="view hidden h-full overflow-y-auto p-8">
+                <div class="max-w-4xl mx-auto">
+                    <div class="flex justify-between items-center mb-8">
+                        <h2 class="text-3xl font-bold">Habits</h2>
+                        <button onclick="showView(event,'habits')" class="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors">
+                            <i class="fas fa-plus"></i>
+                            <span>Add Habit</span>
+                        </button>
+                    </div>
+
+                    <!-- Add / Edit Habit Form -->
+                    <div class="bg-card-light dark:bg-card-dark rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 mb-6">
+                        <h3 class="text-lg font-semibold mb-4">Create a Habit</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input id="habit-name" placeholder="Habit name (e.g., Exercise)" class="w-full px-4 py-3 text-base border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
+                            <select id="habit-frequency" class="w-full px-4 py-3 text-base border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
+                                <option value="daily">Daily</option>
+                                <option value="weekly">Weekly</option>
+                            </select>
+                            <input id="habit-reminder" type="time" class="w-full px-4 py-3 text-base border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
+                            <input id="habit-why" placeholder="Why (optional) — e.g., To be healthier" class="w-full px-4 py-3 text-base border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100" />
+                        </div>
+                        <div class="flex justify-end mt-4">
+                            <button onclick="addHabit()" id="habit-save-btn" class="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg">Save Habit</button>
+                        </div>
+                    </div>
+
+                    <!-- Habits List -->
+                    <div id="habits-list" class="space-y-4">
+                        <!-- Rendered habit cards will appear here -->
+                    </div>
+                </div>
+            </div>
+
             <!-- Journal View -->
             <div id="journal-view" class="view hidden h-full overflow-y-auto p-8">
                 <div class="max-w-4xl mx-auto">
@@ -361,7 +407,7 @@
                     </div>
 
                     <!-- Quick Entry -->
-                    <div class="bg-card-light dark:bg-card-dark rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 mb-6">
+                    <div class="journal-form bg-card-light dark:bg-card-dark rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-6 mb-6">
                         <h3 class="text-lg font-semibold mb-4">Today's Reflection</h3>
                         <textarea 
                             id="journal-entry" 
@@ -369,19 +415,29 @@
                             rows="6"
                             class="w-full px-4 py-3 text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                         ></textarea>
-                        <div class="flex justify-between items-center mt-4">
-                            <div class="flex space-x-4">
-                                <label class="flex items-center">
-                                    <span class="text-sm mr-2">Energy Level:</span>
+
+                        <div class="flex flex-col md:flex-row md:items-center md:justify-between mt-4 gap-4">
+                            <div class="flex flex-wrap items-center gap-3">
+                                <button onclick="toggleHabitsImport()" class="bg-white hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 px-3 py-2 rounded-lg">Import</button>
+                                <button onclick="exportHabits()" class="bg-white hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100 px-3 py-2 rounded-lg">Export</button>
+                                <button onclick="showView(event,'habits')" class="bg-primary hover:bg-primary-dark text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors">
+                                    <i class="fas fa-plus"></i>
+                                    <span>Add Habit</span>
+                                </button>
+                                <input id="habits-import-file" type="file" accept="application/json" style="display:none" onchange="importHabits(event)" />
+
+                                <label class="flex items-center px-2">
+                                    <span class="text-sm mr-2">Energy:</span>
                                     <select id="energy-level" class="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
-                                        <option value="1">Low</option>
-                                        <option value="2">Below Average</option>
-                                        <option value="3" selected>Average</option>
-                                        <option value="4">High</option>
-                                        <option value="5">Very High</option>
+                                        <option value="5">High Energy ⚡️</option>
+                                        <option value="4">Good Energy 😊</option>
+                                        <option value="3" selected>Neutral Energy 😐</option>
+                                        <option value="2">Low Energy 😴</option>
+                                        <option value="1">Very Low Energy 😫</option>
                                     </select>
                                 </label>
-                                <label class="flex items-center">
+
+                                <label class="flex items-center px-2">
                                     <span class="text-sm mr-2">Focus Quality:</span>
                                     <select id="focus-quality" class="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
                                         <option value="1">Poor</option>
@@ -392,9 +448,13 @@
                                     </select>
                                 </label>
                             </div>
-                            <button onclick="saveJournalEntry()" class="bg-primary hover:bg-primary-dark text-white px-6 py-3 rounded-lg transition-colors">
-                                Save Entry
-                            </button>
+
+                            <div class="flex-shrink-0">
+                                <button onclick="saveJournalEntry()" class="bg-primary hover:bg-primary-dark text-white px-6 py-3 rounded-lg transition-colors">
+                                    <i class="fas fa-save mr-2"></i>
+                                    Save Entry
+                                </button>
+                            </div>
                         </div>
                     </div>
 
